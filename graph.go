@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 )
 
 var nodeCounter int
@@ -22,7 +23,7 @@ type graph struct {
 	vertices map[string]*vertex
 }
 
-func (G *graph) updatePath(source *vertex, target *vertex) *graph {
+func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *graph {
 
 	sourcePLow := source.path[0]
 	sourcePHigh := source.path[1]
@@ -30,23 +31,26 @@ func (G *graph) updatePath(source *vertex, target *vertex) *graph {
 	targetPLow := target.path[0]
 	targetPHigh := target.path[1]
 
-	targetPLowNew := sourcePLow + target.ID
-	targetPHighNew := sourcePHigh + target.ID
+	targetPLowNew := sourcePLow + ";" + target.ID
+	targetPHighNew := sourcePHigh + ";" + target.ID
 
-	if len(targetPLowNew) <= len(targetPLow) || targetPLow == target.ID {
+	if len(targetPLowNew) <= length(targetPLow) || targetPLow == target.ID || isInherited {
 		target.path[0] = targetPLowNew
 	}
-	if len(targetPHighNew) >= len(targetPHigh) || targetPLow == target.ID {
+	if len(targetPHighNew) >= length(targetPHigh) || targetPLow == target.ID || isInherited {
 		target.path[1] = targetPHighNew
 	}
 
 	for i := 0; i < len(target.children); i++ {
-		G.updatePath(target, target.children[i])
+		G.updatePath(target, target.children[i], true)
 	}
 
 	return G
 }
 
+func length(path string) int {
+	return len(strings.Split(path, ";"))
+}
 func (G *graph) createVertex(V int) *graph {
 	var nodeCounterString = strconv.Itoa(nodeCounter)
 	Node := &vertex{
@@ -61,14 +65,17 @@ func (G *graph) createVertex(V int) *graph {
 	return G
 }
 
-func (G *graph) createEdge(V1 string, V2 string) *graph {
-	source := G.vertices[V1]
-	target := G.vertices[V2]
+func (G *graph) createEdge(V1 int, V2 int) *graph {
+	v1 := strconv.Itoa(V1)
+	v2 := strconv.Itoa(V2)
+
+	source := G.vertices[v1]
+	target := G.vertices[v2]
 
 	source.children = append(source.children, target)
 	target.parent = append(target.parent, source)
 
-	G.updatePath(source, target)
+	G.updatePath(source, target, false)
 
 	return G
 }
@@ -93,12 +100,29 @@ func main() {
 	G.createVertex(3)
 	G.createVertex(4)
 	G.createVertex(5)
+	G.createVertex(6)
+	G.createVertex(7)
+	G.createVertex(8)
+	G.createVertex(9)
+	G.createVertex(10)
 
-	G.createEdge("1", "2")
-	G.createEdge("1", "3")
-	G.createEdge("1", "4")
-	G.createEdge("4", "5")
-	G.createEdge("2", "3")
-	G.createEdge("3", "5")
+	G.createEdge(1, 2)
+	G.createEdge(1, 3)
+	G.createEdge(2, 4)
+	G.createEdge(2, 5)
+
+	G.createEdge(3, 4)
+	G.createEdge(3, 5)
+	G.createEdge(3, 6)
+	G.createEdge(3, 7)
+
+	G.createEdge(6, 9)
+
+	G.createEdge(7, 8)
+	G.createEdge(7, 9)
+	G.createEdge(7, 10)
+
+	G.createEdge(8, 10)
+
 	printGraph(os.Stdout, G)
 }
