@@ -248,8 +248,9 @@ func main() {
 		}
 	}
 	printGraph(os.Stdout, G)
+	LCSAStatus := G.testLCSA(5, 7)
 
-	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", G.testLCSA(5, 7))
+	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus)
 
 }
 
