@@ -22,7 +22,7 @@ type vertex struct {
 type graph struct {
 	vertices map[string]*vertex
 	root     *vertex
-	paths    []string
+	paths    [][]string
 }
 
 func length(path string) int {
@@ -173,14 +173,14 @@ func (G *graph) findTraversalLCSA(V1 int, V2 int) string {
 		fmt.Fprintf(os.Stdout, "\t%s \n", G.paths[i])
 	}
 
-	shortestPath := ""
+	shortestPath := []string{}
 	for i := 0; i < len(G.paths); i++ {
-		if len(G.paths[i]) > len(shortestPath) || len(shortestPath) == 0 {
+		if len(G.paths[i]) <= len(shortestPath) || len(shortestPath) == 0 {
 			shortestPath = G.paths[i]
 		}
 	}
 	lowestNode := ""
-	for i := 0; i < len(shortestPath); i = i + 2 {
+	for i := 0; i < len(shortestPath); i++ {
 		node := string(shortestPath[i])
 		AllHaveNode := true
 		for j := 0; j < len(G.paths); j++ {
@@ -204,7 +204,8 @@ func (G *graph) findTraversalLCSA(V1 int, V2 int) string {
 
 func (G *graph) dfs(source string, dest string, visiting map[string]bool, currentPath string) {
 	if source == dest {
-		G.paths = append(G.paths, currentPath)
+		currPath := strings.Split(currentPath, ";")
+		G.paths = append(G.paths, currPath)
 		return
 	}
 
@@ -248,13 +249,13 @@ func main() {
 		}
 	}
 	printGraph(os.Stdout, G)
-	LCSAStatus := G.testLCSA(5, 7)
+	LCSAStatus := G.testLCSA(7, 10)
 
 	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus)
 
 }
 
 func (G *graph) testLCSA(v1 int, v2 int) bool {
-	return G.findPathLCSA(5, 7) == G.findTraversalLCSA(5, 7)
+	return G.findPathLCSA(v1, v2) == G.findTraversalLCSA(v1, v2)
 
 }
