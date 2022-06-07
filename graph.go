@@ -21,6 +21,8 @@ type vertex struct {
 // We only allow a single vertex entry to the graph.
 type graph struct {
 	vertices map[string]*vertex
+	root     *vertex
+	paths    []string
 }
 
 func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *graph {
@@ -138,60 +140,64 @@ func (G *graph) findPathLCSA(V1 int, V2 int) {
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v", PLCSA.ID)
+	fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n\n", PLCSA.ID)
 }
 
-func (G *graph) findLCSA(V1 int, V2 int) {
+func (G *graph) findTraversalLCSA(V1 int, V2 int) {
 	v1 := strconv.Itoa(V1)
 	v2 := strconv.Itoa(V2)
 
-	A := G.vertices[v1]
-	B := G.vertices[v2]
-	AAncestors := G.findAncestors(A, make(map[string]*vertex))
-	BAncestors := G.findAncestors(B, make(map[string]*vertex))
-	delete(AAncestors, v1)
-	delete(BAncestors, v2)
+	G.dfs(G.root.ID, v1, make(map[string]bool), G.root.ID)
 
-	// fmt.Fprintf(os.Stdout, "\nAncestors of %s :  %v ", v1, AAncestors)
-	// fmt.Fprintf(os.Stdout, "\nAncestors of %s :  %v \n", v2, BAncestors)
+	G.dfs(G.root.ID, v2, make(map[string]bool), G.root.ID)
 
-	CommonAncestors := intersection(AAncestors, BAncestors)
-	// fmt.Fprintf(os.Stdout, "\nCommon Ancestors :  %v \n", CommonAncestors)
+	fmt.Fprintf(os.Stdout, "Paths to %v or %v are:: \n", v1, v2)
+	for i := 0; i < len(G.paths); i++ {
+		fmt.Fprintf(os.Stdout, "\t%s \n", G.paths[i])
+	}
 
-	TLCSA := &vertex{}
-	for _, Vertex := range CommonAncestors {
-		hasNoChild := true
-		for i := 0; i < len(Vertex.children); i++ {
-			TestChild := Vertex.children[i].ID
-			if CommonAncestors[TestChild] != nil {
-				hasNoChild = false
+	shortestPath := ""
+	for i := 0; i < len(G.paths); i++ {
+		if len(G.paths[i]) > len(shortestPath) || len(shortestPath) == 0 {
+			shortestPath = G.paths[i]
+		}
+	}
+	lowestNode := ""
+	for i := 0; i < len(shortestPath); i = i + 2 {
+		node := string(shortestPath[i])
+		AllHaveNode := true
+		for j := 0; j < len(G.paths); j++ {
+			if string(G.paths[j][i]) != node {
+				AllHaveNode = false
+				break
 			}
 		}
-		if hasNoChild {
-			TLCSA = Vertex
+		if !AllHaveNode {
+			break
+		} else {
+			lowestNode = node
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\n\nLCSA via traversal is %v \n\n", TLCSA.ID)
+	fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n\n", lowestNode)
 
 }
 
-func intersection(m1 map[string]*vertex, m2 map[string]*vertex) map[string]*vertex {
-	res := make(map[string]*vertex)
-	for k, v := range m1 {
-		if m2[k] != nil {
-			res[k] = v
+func (G *graph) dfs(source string, dest string, visiting map[string]bool, currentPath string) {
+	if source == dest {
+		G.paths = append(G.paths, currentPath)
+		return
+	}
+
+	visiting[source] = true
+
+	for _, V := range G.vertices[source].children {
+		if !visiting[V.ID] {
+			currentPath = currentPath + ";" + V.ID
+			G.dfs(V.ID, dest, visiting, currentPath)
+			currentPath = strings.TrimSuffix(currentPath, ";"+V.ID)
 		}
 	}
-	return res
-}
-
-func (G *graph) findAncestors(v *vertex, ancestors map[string]*vertex) map[string]*vertex {
-	ancestors[v.ID] = v
-	for i := 0; i < len(v.parents); i++ {
-		G.findAncestors(v.parents[i], ancestors)
-	}
-	return ancestors
 }
 
 func printGraph(w io.Writer, G *graph) {
@@ -222,8 +228,15 @@ func main() {
 		G.createVertex(j)
 	}
 
+	G.root = G.vertices["1"]
+
 	edgeMap := make(map[int][]int)
-	edgeMap[1] = []int{2, 3, 6}
+	edgeMap[1] = []int{2, 3}
+	edgeMap[2] = []int{4, 5}
+	edgeMap[3] = []int{4, 5, 6, 7}
+	edgeMap[6] = []int{9}
+	edgeMap[7] = []int{8, 9, 10}
+	edgeMap[8] = []int{10}
 
 	for Source, Targets := range edgeMap {
 		for i := 0; i < len(Targets); i++ {
@@ -232,8 +245,6 @@ func main() {
 	}
 	printGraph(os.Stdout, G)
 
-	G.findPathLCSA(2, 3)
-	G.findLCSA(2, 3)
+	G.findPathLCSA(5, 7)
+	G.findTraversalLCSA(5, 7)
 }
-
-// Add tests for checking if the LCSA is actually correct
