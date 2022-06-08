@@ -59,7 +59,7 @@ func (G *graph) createEdge(V1 int, V2 int) *graph {
 }
 
 func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *graph {
-
+	// TODO: Add cycle detection
 	sourcePLow := source.path[0]
 	sourcePHigh := source.path[1]
 
@@ -98,77 +98,59 @@ func printGraph(w io.Writer, G *graph) {
 	fmt.Fprintf(w, "\n\n")
 }
 
-func (G *graph) findPathLCSA(V1 int, V2 int) string {
-	v1 := strconv.Itoa(V1)
-	v2 := strconv.Itoa(V2)
-
-	A := G.vertices[v1]
-	B := G.vertices[v2]
-
-	APathLow := strings.Split(A.path[0], ";")
-	APathHigh := strings.Split(A.path[1], ";")
-
-	shorterAPath := APathHigh
-	if len(APathLow) < len(APathHigh) {
-		shorterAPath = APathLow
+func (G *graph) findPathLCSA(V ...int) string {
+	StudyPaths := [][]string{}
+	for _, v := range V {
+		vs := strconv.Itoa(v)
+		vert := G.vertices[vs]
+		PathLow := strings.Split(vert.path[0], ";")
+		PathHigh := strings.Split(vert.path[1], ";")
+		StudyPaths = append(StudyPaths, PathLow)
+		StudyPaths = append(StudyPaths, PathHigh)
 	}
 
-	ACommonPath := ""
+	shortestPath := StudyPaths[0]
 
-	for i := 0; i < len(shorterAPath); i++ {
-		if APathLow[i] == APathHigh[i] {
-			ACommonPath = string(ACommonPath) + string(APathLow[i])
-		} else {
-			break
+	for _, path := range StudyPaths {
+		if len(path) < len(shortestPath) {
+			shortestPath = path
 		}
 	}
 
-	BPathLow := strings.Split(B.path[0], ";")
-	BPathHigh := strings.Split(B.path[1], ";")
-
-	shorterBPath := BPathHigh
-	if len(BPathLow) < len(BPathHigh) {
-		shorterBPath = BPathLow
-	}
-
-	BCommonPath := ""
-
-	for i := 0; i < len(shorterBPath); i++ {
-		if BPathLow[i] == BPathHigh[i] {
-			BCommonPath = string(BCommonPath) + string(BPathLow[i])
-		} else {
+	lowestNode := ""
+	for i := 0; i < len(shortestPath); i++ {
+		node := string(shortestPath[i])
+		AllHaveNode := true
+		for j := 0; j < len(G.paths); j++ {
+			if string(G.paths[j][i]) != node {
+				AllHaveNode = false
+				break
+			}
+		}
+		if !AllHaveNode {
 			break
+		} else {
+			lowestNode = node
 		}
 	}
 
-	PLCSA := &vertex{}
-	shorterPath := BCommonPath
-	if len(ACommonPath) < len(BCommonPath) {
-		shorterPath = ACommonPath
-	}
-
-	for i := 0; i < len(shorterPath); i++ {
-		if ACommonPath[i] == BCommonPath[i] {
-			PLCSA = G.vertices[string(ACommonPath[i])]
-		} else {
-			break
-		}
-	}
+	PLCSA := G.vertices[lowestNode]
 
 	fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n\n", PLCSA.ID)
 
 	return PLCSA.ID
 }
 
-func (G *graph) findTraversalLCSA(V1 int, V2 int) string {
-	v1 := strconv.Itoa(V1)
-	v2 := strconv.Itoa(V2)
+func (G *graph) findTraversalLCSA(V ...int) string {
+	fmt.Fprintf(os.Stdout, "Paths to nodes ")
+	for _, v := range V {
+		vs := strconv.Itoa(v)
+		fmt.Fprintf(os.Stdout, " %v", vs)
 
-	G.dfs(G.root.ID, v1, make(map[string]bool), G.root.ID)
+		G.dfs(G.root.ID, vs, make(map[string]bool), G.root.ID)
+	}
+	fmt.Fprintf(os.Stdout, "\n")
 
-	G.dfs(G.root.ID, v2, make(map[string]bool), G.root.ID)
-
-	fmt.Fprintf(os.Stdout, "Paths to %v or %v are:: \n", v1, v2)
 	for i := 0; i < len(G.paths); i++ {
 		fmt.Fprintf(os.Stdout, "\t%s \n", G.paths[i])
 	}
@@ -197,7 +179,7 @@ func (G *graph) findTraversalLCSA(V1 int, V2 int) string {
 	}
 
 	fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n\n", lowestNode)
-
+	G.paths = [][]string{}
 	return G.vertices[lowestNode].ID
 
 }
@@ -257,5 +239,4 @@ func main() {
 
 func (G *graph) testLCSA(v1 int, v2 int) bool {
 	return G.findPathLCSA(v1, v2) == G.findTraversalLCSA(v1, v2)
-
 }
