@@ -121,8 +121,8 @@ func (G *graph) findPathLCSA(V ...int) string {
 	for i := 0; i < len(shortestPath); i++ {
 		node := string(shortestPath[i])
 		AllHaveNode := true
-		for j := 0; j < len(G.paths); j++ {
-			if string(G.paths[j][i]) != node {
+		for j := 0; j < len(StudyPaths); j++ {
+			if string(StudyPaths[j][i]) != node {
 				AllHaveNode = false
 				break
 			}
@@ -231,12 +231,11 @@ func main() {
 		}
 	}
 	printGraph(os.Stdout, G)
-	LCSAStatus := G.testLCSA(7, 10)
+	LCSAStatus := G.testLCSA(7, 10, 6)
 
 	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus)
-
 }
 
-func (G *graph) testLCSA(v1 int, v2 int) bool {
-	return G.findPathLCSA(v1, v2) == G.findTraversalLCSA(v1, v2)
+func (G *graph) testLCSA(v ...int) bool {
+	return G.findPathLCSA(v...) == G.findTraversalLCSA(v...)
 }
