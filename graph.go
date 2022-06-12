@@ -1,5 +1,6 @@
 package main
 
+// TODO: Paths of equal lengths cause problems and the result is based on the update order. This needs to be mitigated.
 import (
 	"fmt"
 	"io"
@@ -8,7 +9,7 @@ import (
 	"strings"
 )
 
-var nodeCounter int
+var loggingMode string
 
 type vertex struct {
 	ID       string
@@ -20,9 +21,10 @@ type vertex struct {
 
 // We only allow a single vertex entry to the graph.
 type graph struct {
-	vertices map[string]*vertex
-	root     *vertex
-	paths    [][]string
+	nodeCounter int
+	vertices    map[string]*vertex
+	root        *vertex
+	paths       [][]string
 }
 
 func length(path string) int {
@@ -30,7 +32,7 @@ func length(path string) int {
 }
 
 func (G *graph) createVertex(V int) *graph {
-	var nodeCounterString = strconv.Itoa(nodeCounter)
+	var nodeCounterString = strconv.Itoa(G.nodeCounter)
 	Node := &vertex{
 		ID:       nodeCounterString,
 		children: make(map[string]*vertex),
@@ -39,7 +41,7 @@ func (G *graph) createVertex(V int) *graph {
 		data:     V,
 	}
 	G.vertices[nodeCounterString] = Node
-	nodeCounter++
+	G.nodeCounter++
 	return G
 }
 
@@ -164,23 +166,33 @@ func (G *graph) findPathLCSA(V ...int) string {
 
 	PLCSA := G.vertices[lowestNode]
 
-	fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n", PLCSA.ID)
+	if loggingMode != "none" {
+		fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n", PLCSA.ID)
+	}
 
 	return PLCSA.ID
 }
 
 func (G *graph) findTraversalLCSA(V ...int) string {
-	fmt.Fprintf(os.Stdout, "\nPaths to nodes ")
+	if loggingMode != "none" {
+		fmt.Fprintf(os.Stdout, "\nPaths to nodes ")
+	}
 	for _, v := range V {
 		vs := strconv.Itoa(v)
-		fmt.Fprintf(os.Stdout, " %v", vs)
+		if loggingMode != "none" {
+			fmt.Fprintf(os.Stdout, " %v", vs)
+		}
 
 		G.dfs(G.root.ID, vs, make(map[string]bool), G.root.ID)
 	}
-	fmt.Fprintf(os.Stdout, "\n")
+	if loggingMode != "none" {
+		fmt.Fprintf(os.Stdout, "\n")
+	}
 
-	for i := 0; i < len(G.paths); i++ {
-		fmt.Fprintf(os.Stdout, "\t%s \n", G.paths[i])
+	if loggingMode != "none" {
+		for i := 0; i < len(G.paths); i++ {
+			fmt.Fprintf(os.Stdout, "\t%s \n", G.paths[i])
+		}
 	}
 
 	shortestPath := []string{}
@@ -206,7 +218,9 @@ func (G *graph) findTraversalLCSA(V ...int) string {
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n", lowestNode)
+	if loggingMode != "none" {
+		fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n", lowestNode)
+	}
 	G.paths = [][]string{}
 	return G.vertices[lowestNode].ID
 
@@ -231,10 +245,10 @@ func (G *graph) dfs(source string, dest string, visiting map[string]bool, curren
 }
 
 func main() {
-	nodeCounter = 1
-
+	loggingMode = "all"
 	G := &graph{
-		vertices: make(map[string]*vertex),
+		vertices:    make(map[string]*vertex),
+		nodeCounter: 1,
 	}
 
 	// Define the number of nodes here.
@@ -258,17 +272,16 @@ func main() {
 			G.createEdge(Source, Targets[i])
 		}
 	}
-	printGraph(os.Stdout, G)
-	LCSAStatus := G.testLCSA(7, 9)
-	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus)
 
+	printGraph(os.Stdout, G)
 	G.testAllPairLCSA(numNodes)
-	/*G.removeEdge(7, 10)
-	printGraph(os.Stdout, G)
-	LCSAStatus1 := G.testLCSA(7, 9)
-	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus1)
-	*/
+	//G.removeEdge(7, 10)
+	//G.testAllPairLCSA(numNodes)
 
+	G = &graph{
+		vertices:    make(map[string]*vertex),
+		nodeCounter: 1,
+	}
 }
 
 func (G *graph) testLCSA(v ...int) bool {
@@ -280,7 +293,7 @@ func (G *graph) testAllPairLCSA(n int) {
 	for i := 1; i <= n; i++ {
 		for j := i + 1; j <= n; j++ {
 			if !(G.findPathLCSA(i, j) == G.findTraversalLCSA(i, j)) {
-				FailedPairs = append(FailedPairs, strconv.Itoa(i)+" ,"+strconv.Itoa(j))
+				FailedPairs = append(FailedPairs, strconv.Itoa(i)+","+strconv.Itoa(j))
 			}
 		}
 	}
