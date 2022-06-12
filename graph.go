@@ -12,8 +12,8 @@ var nodeCounter int
 
 type vertex struct {
 	ID       string
-	children []*vertex
-	parents  []*vertex
+	children map[string]*vertex
+	parents  map[string]*vertex
 	path     [2]string
 	data     int
 }
@@ -33,8 +33,8 @@ func (G *graph) createVertex(V int) *graph {
 	var nodeCounterString = strconv.Itoa(nodeCounter)
 	Node := &vertex{
 		ID:       nodeCounterString,
-		children: nil,
-		parents:  nil,
+		children: make(map[string]*vertex),
+		parents:  make(map[string]*vertex),
 		path:     [2]string{nodeCounterString, nodeCounterString},
 		data:     V,
 	}
@@ -50,11 +50,36 @@ func (G *graph) createEdge(V1 int, V2 int) *graph {
 	source := G.vertices[v1]
 	target := G.vertices[v2]
 
-	source.children = append(source.children, target)
-	target.parents = append(target.parents, source)
+	source.children[v2] = target
+	target.parents[v1] = source
 
 	G.updatePath(source, target, false)
 
+	return G
+}
+
+func (G *graph) removeEdge(V1 int, V2 int) *graph {
+	v1 := strconv.Itoa(V1)
+	v2 := strconv.Itoa(V2)
+
+	source := G.vertices[v1]
+	target := G.vertices[v2]
+
+	delete(source.children, v2)
+	delete(target.parents, v1)
+
+	for _, newParent := range target.parents {
+		if len(newParent.path[0]) < len(target.path[0]) {
+			target.path[0] = newParent.path[0]
+		}
+		if len(newParent.path[1]) > len(target.path[1]) {
+			target.path[1] = newParent.path[1]
+		}
+	}
+
+	for _, v := range target.children {
+		G.updatePath(target, v, true) // the inherited path is used to update all the paths of a subtree
+	}
 	return G
 }
 
@@ -69,15 +94,18 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 	targetPLowNew := sourcePLow + ";" + target.ID
 	targetPHighNew := sourcePHigh + ";" + target.ID
 
-	if len(targetPLowNew) < length(targetPLow) || targetPLow == target.ID || isInherited {
+	if len(targetPLowNew) <= length(targetPLow) || targetPLow == target.ID || isInherited {
 		target.path[0] = targetPLowNew
 	}
-	if len(targetPHighNew) >= length(targetPHigh) || targetPLow == target.ID || isInherited {
+	if len(targetPHighNew) > length(targetPHigh) || targetPLow == target.ID || isInherited {
 		target.path[1] = targetPHighNew
 	}
 
-	for i := 0; i < len(target.children); i++ {
-		G.updatePath(target, target.children[i], true) // the inherited path is used to update all the paths of a subtree
+	for _, v := range target.children {
+		G.updatePath(target, v, true)
+		// The inherited path is used to update all the paths of a subtree.
+		// This inherited property comes of importance when the root of the tree changes and
+		// a new root is added at a level above the current root
 	}
 
 	return G
@@ -89,8 +117,8 @@ func printGraph(w io.Writer, G *graph) {
 		V := G.vertices[strconv.Itoa(i)]
 
 		fmt.Fprintf(w, "Node:  %v\t Children: ", V.ID)
-		for j := 0; j < len(V.children); j++ {
-			fmt.Fprintf(w, "%v ", V.children[j].ID)
+		for _, child := range V.children {
+			fmt.Fprintf(w, "%v ", child.ID)
 		}
 		fmt.Fprintf(w, "\t Paths: %v\t \n", V.path)
 
@@ -136,13 +164,13 @@ func (G *graph) findPathLCSA(V ...int) string {
 
 	PLCSA := G.vertices[lowestNode]
 
-	fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n\n", PLCSA.ID)
+	fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n", PLCSA.ID)
 
 	return PLCSA.ID
 }
 
 func (G *graph) findTraversalLCSA(V ...int) string {
-	fmt.Fprintf(os.Stdout, "Paths to nodes ")
+	fmt.Fprintf(os.Stdout, "\nPaths to nodes ")
 	for _, v := range V {
 		vs := strconv.Itoa(v)
 		fmt.Fprintf(os.Stdout, " %v", vs)
@@ -178,7 +206,7 @@ func (G *graph) findTraversalLCSA(V ...int) string {
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n\n", lowestNode)
+	fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n", lowestNode)
 	G.paths = [][]string{}
 	return G.vertices[lowestNode].ID
 
@@ -231,11 +259,30 @@ func main() {
 		}
 	}
 	printGraph(os.Stdout, G)
-	LCSAStatus := G.testLCSA(7, 10, 6)
-
+	LCSAStatus := G.testLCSA(7, 9)
 	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus)
+
+	G.testAllPairLCSA(numNodes)
+	/*G.removeEdge(7, 10)
+	printGraph(os.Stdout, G)
+	LCSAStatus1 := G.testLCSA(7, 9)
+	fmt.Fprintf(os.Stdout, "\nLCSA is same in both the cases?  %v \n\n", LCSAStatus1)
+	*/
+
 }
 
 func (G *graph) testLCSA(v ...int) bool {
 	return G.findPathLCSA(v...) == G.findTraversalLCSA(v...)
+}
+
+func (G *graph) testAllPairLCSA(n int) {
+	FailedPairs := []string{}
+	for i := 1; i <= n; i++ {
+		for j := i + 1; j <= n; j++ {
+			if !(G.findPathLCSA(i, j) == G.findTraversalLCSA(i, j)) {
+				FailedPairs = append(FailedPairs, strconv.Itoa(i)+" ,"+strconv.Itoa(j))
+			}
+		}
+	}
+	fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", FailedPairs)
 }
