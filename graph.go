@@ -5,26 +5,26 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
+	"runtime"
 	"strings"
 )
 
 var loggingMode string
 
 type vertex struct {
-	ID       string
-	children map[string]*vertex
-	parents  map[string]*vertex
-	path     [2]string
+	ID       int
+	children map[int]*vertex
+	parents  map[int]*vertex
+	path     [2][]int
 	data     int
 }
 
 // We only allow a single vertex entry to the graph.
 type graph struct {
 	nodeCounter int
-	vertices    map[string]*vertex
+	vertices    map[int]*vertex
 	root        *vertex
-	paths       [][]string
+	paths       [][]int
 }
 
 func length(path string) int {
@@ -32,28 +32,24 @@ func length(path string) int {
 }
 
 func (G *graph) createVertex(V int) *graph {
-	var nodeCounterString = strconv.Itoa(G.nodeCounter)
 	Node := &vertex{
-		ID:       nodeCounterString,
-		children: make(map[string]*vertex),
-		parents:  make(map[string]*vertex),
-		path:     [2]string{nodeCounterString, nodeCounterString},
+		ID:       G.nodeCounter,
+		children: make(map[int]*vertex),
+		parents:  make(map[int]*vertex),
+		path:     [2][]int{{G.nodeCounter}, {G.nodeCounter}},
 		data:     V,
 	}
-	G.vertices[nodeCounterString] = Node
+	G.vertices[G.nodeCounter] = Node
 	G.nodeCounter++
 	return G
 }
 
 func (G *graph) createEdge(V1 int, V2 int) *graph {
-	v1 := strconv.Itoa(V1)
-	v2 := strconv.Itoa(V2)
+	source := G.vertices[V1]
+	target := G.vertices[V2]
 
-	source := G.vertices[v1]
-	target := G.vertices[v2]
-
-	source.children[v2] = target
-	target.parents[v1] = source
+	source.children[V2] = target
+	target.parents[V1] = source
 
 	G.updatePath(source, target, false)
 
@@ -61,14 +57,12 @@ func (G *graph) createEdge(V1 int, V2 int) *graph {
 }
 
 func (G *graph) removeEdge(V1 int, V2 int) *graph {
-	v1 := strconv.Itoa(V1)
-	v2 := strconv.Itoa(V2)
 
-	source := G.vertices[v1]
-	target := G.vertices[v2]
+	source := G.vertices[V1]
+	target := G.vertices[V2]
 
-	delete(source.children, v2)
-	delete(target.parents, v1)
+	delete(source.children, V2)
+	delete(target.parents, V1)
 
 	for _, newParent := range target.parents {
 		if len(newParent.path[0]) < len(target.path[0]) {
@@ -92,27 +86,27 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 	targetPLow := target.path[0]
 	targetPHigh := target.path[1]
 
-	targetPLowNew := sourcePLow + ";" + target.ID
-	targetPHighNew := sourcePHigh + ";" + target.ID
+	targetPLowNew := append(sourcePLow, target.ID)
+	targetPHighNew := append(sourcePHigh, target.ID)
 
-	if len(targetPLowNew) == len(targetPLow) || isInherited {
-		fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
+	if len(targetPLowNew) == len(targetPLow) {
+		//fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
 		if G.pathSmallerThan(targetPLowNew, targetPLow) {
-			fmt.Fprintf(os.Stdout, "\nBroken conflict and shorter path is %v \n", targetPLowNew)
+			//fmt.Fprintf(os.Stdout, "\nBroken conflict and shorter path is %v \n", targetPLowNew)
 			target.path[0] = targetPLowNew
 		}
-	} else if len(targetPLowNew) < len(targetPLow) || targetPLow == target.ID || isInherited {
-		fmt.Fprintf(os.Stdout, "\nFound a shorter path to %v \n", target.ID)
+	} else if len(targetPLowNew) < len(targetPLow) || len(targetPLow) == 1 {
+		//fmt.Fprintf(os.Stdout, "\nFound a shorter path to %v \n", target.ID)
 		target.path[0] = targetPLowNew
 	}
 	if len(targetPHighNew) == len(targetPHigh) {
-		fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
+		//fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
 		if G.pathSmallerThan(targetPHigh, targetPHighNew) {
-			fmt.Fprintf(os.Stdout, "\nBroken conflict and longer path is %v \n", targetPHighNew)
+			//fmt.Fprintf(os.Stdout, "\nBroken conflict and longer path is %v \n", targetPHighNew)
 			target.path[1] = targetPHighNew
 		}
-	} else if len(targetPHighNew) > len(targetPHigh) || targetPLow == target.ID || isInherited {
-		fmt.Fprintf(os.Stdout, "\nFound a longer path to %v \n", target.ID)
+	} else if len(targetPHighNew) > len(targetPHigh) || len(targetPLow) == 1 {
+		//fmt.Fprintf(os.Stdout, "\nFound a longer path to %v \n", target.ID)
 		target.path[1] = targetPHighNew
 	}
 
@@ -125,7 +119,7 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 
 	return G
 }
-func (G *graph) pathSmallerThan(P1 string, P2 string) bool {
+func (G *graph) pathSmallerThan(P1 []int, P2 []int) bool {
 	// This method assumes that for any node, the children are ordered by their Ids. So a child with a highest ID is the right most child
 	smallerPath := false
 	for i := 0; i < len(P1); i++ {
@@ -144,43 +138,42 @@ func (G *graph) pathSmallerThan(P1 string, P2 string) bool {
 func printGraph(w io.Writer, G *graph) {
 
 	for i := 1; i <= len(G.vertices); i++ {
-		V := G.vertices[strconv.Itoa(i)]
+		V := G.vertices[i]
 
 		fmt.Fprintf(w, "Node:  %v\t Children: ", V.ID)
-		for _, child := range V.children {
-			fmt.Fprintf(w, "%v ", child.ID)
-		}
+		fmt.Fprintf(w, "%v \t", V.children)
 		fmt.Fprintf(w, "\t Paths: %v\t \n", V.path)
 
 	}
 	fmt.Fprintf(w, "\n\n")
 }
 
-func (G *graph) findPathLCSA(V ...int) string {
-	StudyPaths := [][]string{}
+func (G *graph) findPathLCSA(V ...int) int {
+	fmt.Fprintf(os.Stdout, "Path for %v \n", V)
+	StudyPaths := make([][]int, 0)
 	for _, v := range V {
-		vs := strconv.Itoa(v)
-		vert := G.vertices[vs]
-		PathLow := strings.Split(vert.path[0], ";")
-		PathHigh := strings.Split(vert.path[1], ";")
+		vert := G.vertices[v]
+		fmt.Fprintf(os.Stdout, "Vertex %v \n", vert)
+		PathLow := vert.path[0]
+		PathHigh := vert.path[1]
 		StudyPaths = append(StudyPaths, PathLow)
 		StudyPaths = append(StudyPaths, PathHigh)
 	}
 
 	shortestPath := StudyPaths[0]
-
+	fmt.Fprintf(os.Stdout, "Study Paths %v \n", StudyPaths)
 	for _, path := range StudyPaths {
 		if len(path) < len(shortestPath) {
 			shortestPath = path
 		}
 	}
 
-	lowestNode := ""
+	lowestNode := 0
 	for i := 0; i < len(shortestPath); i++ {
-		node := string(shortestPath[i])
+		node := shortestPath[i]
 		AllHaveNode := true
 		for j := 0; j < len(StudyPaths); j++ {
-			if string(StudyPaths[j][i]) != node {
+			if StudyPaths[j][i] != node {
 				AllHaveNode = false
 				break
 			}
@@ -191,8 +184,12 @@ func (G *graph) findPathLCSA(V ...int) string {
 			lowestNode = node
 		}
 	}
-
-	PLCSA := G.vertices[lowestNode]
+	PLCSA := &vertex{ID: 0}
+	if lowestNode == 0 {
+		PLCSA = nil
+	} else {
+		PLCSA = G.vertices[lowestNode]
+	}
 
 	if loggingMode != "none" {
 		fmt.Fprintf(os.Stdout, "LCSA via longest path prefix is %v \n", PLCSA.ID)
@@ -201,17 +198,16 @@ func (G *graph) findPathLCSA(V ...int) string {
 	return PLCSA.ID
 }
 
-func (G *graph) findTraversalLCSA(V ...int) string {
+func (G *graph) findTraversalLCSA(V ...int) int {
 	if loggingMode != "none" {
 		fmt.Fprintf(os.Stdout, "\nPaths to nodes ")
 	}
 	for _, v := range V {
-		vs := strconv.Itoa(v)
 		if loggingMode != "none" {
-			fmt.Fprintf(os.Stdout, " %v", vs)
+			fmt.Fprintf(os.Stdout, " %v", v)
 		}
 
-		G.dfs(G.root.ID, vs, make(map[string]bool), G.root.ID)
+		G.dfs(G.root.ID, v, make(map[int]bool), []int{G.root.ID})
 	}
 	if loggingMode != "none" {
 		fmt.Fprintf(os.Stdout, "\n")
@@ -223,18 +219,18 @@ func (G *graph) findTraversalLCSA(V ...int) string {
 		}
 	}
 
-	shortestPath := []string{}
+	shortestPath := []int{}
 	for i := 0; i < len(G.paths); i++ {
 		if len(G.paths[i]) <= len(shortestPath) || len(shortestPath) == 0 {
 			shortestPath = G.paths[i]
 		}
 	}
-	lowestNode := ""
+	lowestNode := 0
 	for i := 0; i < len(shortestPath); i++ {
-		node := string(shortestPath[i])
+		node := shortestPath[i]
 		AllHaveNode := true
 		for j := 0; j < len(G.paths); j++ {
-			if string(G.paths[j][i]) != node {
+			if G.paths[j][i] != node {
 				AllHaveNode = false
 				break
 			}
@@ -249,14 +245,14 @@ func (G *graph) findTraversalLCSA(V ...int) string {
 	if loggingMode != "none" {
 		fmt.Fprintf(os.Stdout, "\nLCSA via Path Traversal is %v \n", lowestNode)
 	}
-	G.paths = [][]string{}
+	G.paths = make([][]int, 0)
 	return G.vertices[lowestNode].ID
 
 }
 
-func (G *graph) dfs(source string, dest string, visiting map[string]bool, currentPath string) {
+func (G *graph) dfs(source int, dest int, visiting map[int]bool, currentPath []int) {
 	if source == dest {
-		currPath := strings.Split(currentPath, ";")
+		currPath := currentPath
 		G.paths = append(G.paths, currPath)
 		return
 	}
@@ -265,17 +261,17 @@ func (G *graph) dfs(source string, dest string, visiting map[string]bool, curren
 
 	for _, V := range G.vertices[source].children {
 		if !visiting[V.ID] {
-			currentPath = currentPath + ";" + V.ID
+			currentPath = append(currentPath, V.ID)
 			G.dfs(V.ID, dest, visiting, currentPath)
-			currentPath = strings.TrimSuffix(currentPath, ";"+V.ID)
+			currentPath = currentPath[:len(currentPath)-1]
 		}
 	}
 }
 
 func main() {
-	loggingMode = "all"
+	loggingMode = "none"
 	G := &graph{
-		vertices:    make(map[string]*vertex),
+		vertices:    make(map[int]*vertex),
 		nodeCounter: 1,
 	}
 
@@ -285,7 +281,7 @@ func main() {
 		G.createVertex(j)
 	}
 
-	G.root = G.vertices["1"]
+	G.root = G.vertices[1]
 
 	edgeMap := make(map[int][]int)
 	edgeMap[1] = []int{2, 3}
@@ -303,15 +299,11 @@ func main() {
 	}
 
 	printGraph(os.Stdout, G)
-	G.testLCSA(7, 9)
+	//G.testLCSA(7, 9)
 	//G.testAllPairLCSA(numNodes)
 	//G.removeEdge(7, 10)
 	//G.testAllPairLCSA(numNodes)
-
-	G = &graph{
-		vertices:    make(map[string]*vertex),
-		nodeCounter: 1,
-	}
+	runtime.GC()
 }
 
 func (G *graph) testLCSA(v ...int) {
@@ -322,9 +314,11 @@ func (G *graph) testAllPairLCSA(n int) {
 	FailedPairs := []string{}
 	for i := 1; i <= n; i++ {
 		for j := i + 1; j <= n; j++ {
-			if !(G.findPathLCSA(i, j) == G.findTraversalLCSA(i, j)) {
-				FailedPairs = append(FailedPairs, strconv.Itoa(i)+","+strconv.Itoa(j))
-			}
+			fmt.Fprintf(os.Stdout, "\nTesting Pair %v, %v\n", i, j)
+			G.findPathLCSA(i, j)
+			//if !(G.findPathLCSA(i, j) == G.findTraversalLCSA(i, j)) {
+			//	FailedPairs = append(FailedPairs, strconv.Itoa(i)+","+strconv.Itoa(j))
+			//}
 		}
 	}
 	fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", FailedPairs)
