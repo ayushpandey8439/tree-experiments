@@ -86,7 +86,6 @@ func (G *graph) removeEdge(V1 int, V2 int) *graph {
 }
 
 func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *graph {
-	// TODO: Add cycle detection
 	sourcePLow := source.path[0]
 	sourcePHigh := source.path[1]
 
@@ -96,10 +95,24 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 	targetPLowNew := sourcePLow + ";" + target.ID
 	targetPHighNew := sourcePHigh + ";" + target.ID
 
-	if len(targetPLowNew) <= length(targetPLow) || targetPLow == target.ID || isInherited {
+	if len(targetPLowNew) == len(targetPLow) || isInherited {
+		fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
+		if G.pathSmallerThan(targetPLowNew, targetPLow) {
+			fmt.Fprintf(os.Stdout, "\nBroken conflict and shorter path is %v \n", targetPLowNew)
+			target.path[0] = targetPLowNew
+		}
+	} else if len(targetPLowNew) < len(targetPLow) || targetPLow == target.ID || isInherited {
+		fmt.Fprintf(os.Stdout, "\nFound a shorter path to %v \n", target.ID)
 		target.path[0] = targetPLowNew
 	}
-	if len(targetPHighNew) > length(targetPHigh) || targetPLow == target.ID || isInherited {
+	if len(targetPHighNew) == len(targetPHigh) {
+		fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
+		if G.pathSmallerThan(targetPHigh, targetPHighNew) {
+			fmt.Fprintf(os.Stdout, "\nBroken conflict and longer path is %v \n", targetPHighNew)
+			target.path[1] = targetPHighNew
+		}
+	} else if len(targetPHighNew) > len(targetPHigh) || targetPLow == target.ID || isInherited {
+		fmt.Fprintf(os.Stdout, "\nFound a longer path to %v \n", target.ID)
 		target.path[1] = targetPHighNew
 	}
 
@@ -111,6 +124,21 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 	}
 
 	return G
+}
+func (G *graph) pathSmallerThan(P1 string, P2 string) bool {
+	// This method assumes that for any node, the children are ordered by their Ids. So a child with a highest ID is the right most child
+	smallerPath := false
+	for i := 0; i < len(P1); i++ {
+		node := P1[i]
+		if P2[i] != node {
+			lowestNode1 := P1[i]
+			lowestNode2 := P2[i]
+			if lowestNode1 < lowestNode2 {
+				smallerPath = true
+			}
+		}
+	}
+	return smallerPath
 }
 
 func printGraph(w io.Writer, G *graph) {
@@ -268,13 +296,15 @@ func main() {
 	edgeMap[8] = []int{10}
 
 	for Source, Targets := range edgeMap {
-		for i := 0; i < len(Targets); i++ {
-			G.createEdge(Source, Targets[i])
+		for _, Target := range Targets {
+			fmt.Fprintf(os.Stdout, "\nCreating edge between %v, %v \n", Source, Target)
+			G.createEdge(Source, Target)
 		}
 	}
 
 	printGraph(os.Stdout, G)
-	G.testAllPairLCSA(numNodes)
+	G.testLCSA(7, 9)
+	//G.testAllPairLCSA(numNodes)
 	//G.removeEdge(7, 10)
 	//G.testAllPairLCSA(numNodes)
 
@@ -284,8 +314,8 @@ func main() {
 	}
 }
 
-func (G *graph) testLCSA(v ...int) bool {
-	return G.findPathLCSA(v...) == G.findTraversalLCSA(v...)
+func (G *graph) testLCSA(v ...int) {
+	fmt.Fprintf(os.Stdout, "\nLCSA same via path and dfs?  %v \n\n", G.findPathLCSA(v...) == G.findTraversalLCSA(v...))
 }
 
 func (G *graph) testAllPairLCSA(n int) {
