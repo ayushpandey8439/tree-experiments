@@ -95,7 +95,7 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 			//fmt.Fprintf(os.Stdout, "\nBroken conflict and shorter path is %v \n", targetPLowNew)
 			target.path[0] = targetPLowNew
 		}
-	} else if len(targetPLowNew) < len(targetPLow) || len(targetPLow) == 1 {
+	} else if len(targetPLowNew) < len(targetPLow) || len(targetPLow) == 1 || isInherited {
 		//fmt.Fprintf(os.Stdout, "\nFound a shorter path to %v \n", target.ID)
 		target.path[0] = targetPLowNew
 	}
@@ -105,7 +105,7 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 			//fmt.Fprintf(os.Stdout, "\nBroken conflict and longer path is %v \n", targetPHighNew)
 			target.path[1] = targetPHighNew
 		}
-	} else if len(targetPHighNew) > len(targetPHigh) || len(targetPLow) == 1 {
+	} else if len(targetPHighNew) > len(targetPHigh) || len(targetPLow) == 1 || isInherited {
 		//fmt.Fprintf(os.Stdout, "\nFound a longer path to %v \n", target.ID)
 		target.path[1] = targetPHighNew
 	}
@@ -300,7 +300,7 @@ func main() {
 
 	printGraph(os.Stdout, G)
 	//G.testLCSA(7, 9)
-	//G.testAllPairLCSA(numNodes)
+	G.testAllPairLCSA(numNodes)
 	//G.removeEdge(7, 10)
 	//G.testAllPairLCSA(numNodes)
 	runtime.GC()
