@@ -77,34 +77,71 @@ func (G *graph) removeEdge(V1 int, V2 int) *graph {
 }
 
 func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *graph {
-	sourcePLow := source.path[0]
-	sourcePHigh := source.path[1]
 
-	targetPLow := target.path[0]
-	targetPHigh := target.path[1]
+	if isInherited {
+		shortestInherited := make([]int, 0)
+		longestInherited := make([]int, 0)
+		for _, v := range target.parents {
+			newLow := append(v.path[0], target.ID)
+			newHigh := append(v.path[1], target.ID)
+			if len(shortestInherited) == 0 {
+				shortestInherited = newLow
+			}
+			if len(newLow) == len(shortestInherited) {
+				if G.pathSmallerThan(newLow, shortestInherited) {
+					shortestInherited = newLow
+				}
+			}
+			if len(newLow) < len(shortestInherited) {
+				shortestInherited = newLow
+			}
+			if len(longestInherited) == 0 {
+				longestInherited = newHigh
+			}
+			if len(newHigh) == len(longestInherited) {
+				if G.pathSmallerThan(longestInherited, newHigh) {
+					longestInherited = newHigh
+				}
+			}
+			if len(newHigh) > len(longestInherited) {
+				longestInherited = newHigh
+			}
+		}
+		target.path[0] = make([]int, len(shortestInherited))
+		copy(target.path[0], shortestInherited)
+		target.path[1] = make([]int, len(longestInherited))
+		copy(target.path[1], longestInherited)
+	} else {
+		sourcePLow := make([]int, len(source.path[0]))
+		copy(sourcePLow, source.path[0])
+		sourcePHigh := make([]int, len(source.path[1]))
+		copy(sourcePHigh, source.path[1])
 
-	targetPLowNew := append(sourcePLow, target.ID)
-	targetPHighNew := append(sourcePHigh, target.ID)
+		targetPLow := make([]int, len(target.path[0]))
+		copy(targetPLow, target.path[0])
+		targetPHigh := make([]int, len(target.path[1]))
+		copy(targetPHigh, target.path[1])
 
-	if len(targetPLowNew) == len(targetPLow) {
-		//fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
-		if G.pathSmallerThan(targetPLowNew, targetPLow) {
-			//fmt.Fprintf(os.Stdout, "\nBroken conflict and shorter path is %v \n", targetPLowNew)
+		targetPLowNew := append(sourcePLow, target.ID)
+		targetPHighNew := append(sourcePHigh, target.ID)
+		fmt.Fprintf(os.Stdout, "\nUpdate edge %v, %v Old Paths are %v %v ", source.ID, target.ID, targetPLow, targetPHigh)
+
+		if len(targetPLowNew) == len(targetPLow) {
+			if G.pathSmallerThan(targetPLowNew, targetPLow) {
+				target.path[0] = targetPLowNew
+			}
+		} else if len(targetPLowNew) < len(targetPLow) || len(targetPLow) == 1 {
 			target.path[0] = targetPLowNew
 		}
-	} else if len(targetPLowNew) < len(targetPLow) || len(targetPLow) == 1 || isInherited {
-		//fmt.Fprintf(os.Stdout, "\nFound a shorter path to %v \n", target.ID)
-		target.path[0] = targetPLowNew
-	}
-	if len(targetPHighNew) == len(targetPHigh) {
-		//fmt.Fprintf(os.Stdout, "\nPath Length Conflict for %v \n", target.ID)
-		if G.pathSmallerThan(targetPHigh, targetPHighNew) {
-			//fmt.Fprintf(os.Stdout, "\nBroken conflict and longer path is %v \n", targetPHighNew)
+		if len(targetPHighNew) == len(targetPHigh) {
+			if G.pathSmallerThan(targetPHigh, targetPHighNew) {
+				target.path[1] = targetPHighNew
+			}
+		} else if len(targetPHighNew) > len(targetPHigh) || len(targetPLow) == 1 {
 			target.path[1] = targetPHighNew
 		}
-	} else if len(targetPHighNew) > len(targetPHigh) || len(targetPLow) == 1 || isInherited {
-		//fmt.Fprintf(os.Stdout, "\nFound a longer path to %v \n", target.ID)
-		target.path[1] = targetPHighNew
+		fmt.Fprintf(os.Stdout, "Updated paths are %v %v\n", target.path[0], target.path[1])
+
 	}
 
 	for _, v := range target.children {
@@ -146,11 +183,9 @@ func printGraph(w io.Writer, G *graph) {
 }
 
 func (G *graph) findPathLCSA(V ...int) int {
-	fmt.Fprintf(os.Stdout, "Path for %v \n", V)
 	StudyPaths := make([][]int, 0)
 	for _, v := range V {
 		vert := G.vertices[v]
-		fmt.Fprintf(os.Stdout, "Vertex %v \n", vert)
 		PathLow := vert.path[0]
 		PathHigh := vert.path[1]
 		StudyPaths = append(StudyPaths, PathLow)
@@ -158,7 +193,6 @@ func (G *graph) findPathLCSA(V ...int) int {
 	}
 
 	shortestPath := StudyPaths[0]
-	fmt.Fprintf(os.Stdout, "Study Paths %v \n", StudyPaths)
 	for _, path := range StudyPaths {
 		if len(path) < len(shortestPath) {
 			shortestPath = path
@@ -251,7 +285,6 @@ func (G *graph) dfs(source int, dest int) {
 	if source == dest {
 		detectedpath := make([]int, len(G.currentPath))
 		copy(detectedpath, G.currentPath)
-		//fmt.Fprintf(os.Stdout, "Path to reach destination is: %v, glock variable path is %v", detectedpath, G.currentPath)
 		G.paths = append(G.paths, detectedpath)
 		return
 	} else {
@@ -295,19 +328,7 @@ func main() {
 	}
 
 	printGraph(os.Stdout, G)
-
-	G.dfs(G.root.ID, 2)
-	fmt.Fprintf(os.Stdout, "\nDFS Paths %v\n", G.paths)
-	/*for j := 1; j < 20; j++ {
-		Fps := G.testAllPairLCSA(numNodes)
-		if len(Fps) > 0 {
-			fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", Fps)
-			break
-		} else {
-			continue
-		}
-	}
-	*/
+	fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", G.testAllPairLCSA(numNodes))
 	runtime.GC()
 }
 
