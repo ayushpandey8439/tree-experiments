@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"strings"
+	"strconv"
 )
 
 var loggingMode string
@@ -25,10 +25,7 @@ type graph struct {
 	vertices    map[int]*vertex
 	root        *vertex
 	paths       [][]int
-}
-
-func length(path string) int {
-	return len(strings.Split(path, ";"))
+	currentPath []int
 }
 
 func (G *graph) createVertex(V int) *graph {
@@ -140,7 +137,7 @@ func printGraph(w io.Writer, G *graph) {
 	for i := 1; i <= len(G.vertices); i++ {
 		V := G.vertices[i]
 
-		fmt.Fprintf(w, "Node:  %v\t Children: ", V.ID)
+		fmt.Fprintf(w, "Node:  %v %v\t Children: ", V.ID, &V)
 		fmt.Fprintf(w, "%v \t", V.children)
 		fmt.Fprintf(w, "\t Paths: %v\t \n", V.path)
 
@@ -207,7 +204,7 @@ func (G *graph) findTraversalLCSA(V ...int) int {
 			fmt.Fprintf(os.Stdout, " %v", v)
 		}
 
-		G.dfs(G.root.ID, v, make(map[int]bool), []int{G.root.ID})
+		G.dfs(G.root.ID, v)
 	}
 	if loggingMode != "none" {
 		fmt.Fprintf(os.Stdout, "\n")
@@ -250,20 +247,18 @@ func (G *graph) findTraversalLCSA(V ...int) int {
 
 }
 
-func (G *graph) dfs(source int, dest int, visiting map[int]bool, currentPath []int) {
+func (G *graph) dfs(source int, dest int) {
 	if source == dest {
-		currPath := currentPath
-		G.paths = append(G.paths, currPath)
+		detectedpath := make([]int, len(G.currentPath))
+		copy(detectedpath, G.currentPath)
+		//fmt.Fprintf(os.Stdout, "Path to reach destination is: %v, glock variable path is %v", detectedpath, G.currentPath)
+		G.paths = append(G.paths, detectedpath)
 		return
-	}
-
-	visiting[source] = true
-
-	for _, V := range G.vertices[source].children {
-		if !visiting[V.ID] {
-			currentPath = append(currentPath, V.ID)
-			G.dfs(V.ID, dest, visiting, currentPath)
-			currentPath = currentPath[:len(currentPath)-1]
+	} else {
+		for _, V := range G.vertices[source].children {
+			G.currentPath = append(G.currentPath, V.ID)
+			G.dfs(V.ID, dest)
+			G.currentPath = G.currentPath[:len(G.currentPath)-1]
 		}
 	}
 }
@@ -282,6 +277,7 @@ func main() {
 	}
 
 	G.root = G.vertices[1]
+	G.currentPath = []int{G.root.ID}
 
 	edgeMap := make(map[int][]int)
 	edgeMap[1] = []int{2, 3}
@@ -293,16 +289,25 @@ func main() {
 
 	for Source, Targets := range edgeMap {
 		for _, Target := range Targets {
-			fmt.Fprintf(os.Stdout, "\nCreating edge between %v, %v \n", Source, Target)
+			//fmt.Fprintf(os.Stdout, "\nCreating edge between %v, %v \n", Source, Target)
 			G.createEdge(Source, Target)
 		}
 	}
 
 	printGraph(os.Stdout, G)
-	//G.testLCSA(7, 9)
-	G.testAllPairLCSA(numNodes)
-	//G.removeEdge(7, 10)
-	//G.testAllPairLCSA(numNodes)
+
+	G.dfs(G.root.ID, 2)
+	fmt.Fprintf(os.Stdout, "\nDFS Paths %v\n", G.paths)
+	/*for j := 1; j < 20; j++ {
+		Fps := G.testAllPairLCSA(numNodes)
+		if len(Fps) > 0 {
+			fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", Fps)
+			break
+		} else {
+			continue
+		}
+	}
+	*/
 	runtime.GC()
 }
 
@@ -310,16 +315,17 @@ func (G *graph) testLCSA(v ...int) {
 	fmt.Fprintf(os.Stdout, "\nLCSA same via path and dfs?  %v \n\n", G.findPathLCSA(v...) == G.findTraversalLCSA(v...))
 }
 
-func (G *graph) testAllPairLCSA(n int) {
+func (G *graph) testAllPairLCSA(n int) []string {
 	FailedPairs := []string{}
 	for i := 1; i <= n; i++ {
 		for j := i + 1; j <= n; j++ {
-			fmt.Fprintf(os.Stdout, "\nTesting Pair %v, %v\n", i, j)
-			G.findPathLCSA(i, j)
-			//if !(G.findPathLCSA(i, j) == G.findTraversalLCSA(i, j)) {
-			//	FailedPairs = append(FailedPairs, strconv.Itoa(i)+","+strconv.Itoa(j))
-			//}
+			//G.findPathLCSA(i, j)
+			PLCSA := G.findPathLCSA(i, j)
+			TLCSA := G.findTraversalLCSA(i, j)
+			if !(PLCSA == TLCSA) {
+				FailedPairs = append(FailedPairs, strconv.Itoa(i)+","+strconv.Itoa(j)+"; PLCSA: "+strconv.Itoa(PLCSA)+"; TLCSA: "+strconv.Itoa(TLCSA))
+			}
 		}
 	}
-	fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", FailedPairs)
+	return FailedPairs
 }
