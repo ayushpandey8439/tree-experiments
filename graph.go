@@ -48,69 +48,32 @@ func (G *graph) createEdge(V1 int, V2 int) *graph {
 	source.children[V2] = target
 	target.parents[V1] = source
 
-	G.updatePath(source, target, false)
+	G.updatePath(source, target, false, [2][]int{}, source.ID)
 
 	return G
 }
 
-func (G *graph) removeEdge(V1 int, V2 int) *graph {
-
-	source := G.vertices[V1]
-	target := G.vertices[V2]
-
-	delete(source.children, V2)
-	delete(target.parents, V1)
-
-	for _, newParent := range target.parents {
-		if len(newParent.path[0]) < len(target.path[0]) {
-			target.path[0] = newParent.path[0]
-		}
-		if len(newParent.path[1]) > len(target.path[1]) {
-			target.path[1] = newParent.path[1]
-		}
-	}
-
-	for _, v := range target.children {
-		G.updatePath(target, v, true) // the inherited path is used to update all the paths of a subtree
-	}
-	return G
-}
-
-func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *graph {
+func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inheritedPath [2][]int, inheritedFrom int) *graph {
 
 	if isInherited {
-		shortestInherited := make([]int, 0)
-		longestInherited := make([]int, 0)
-		for _, v := range target.parents {
-			newLow := append(v.path[0], target.ID)
-			newHigh := append(v.path[1], target.ID)
-			if len(shortestInherited) == 0 {
-				shortestInherited = newLow
-			}
-			if len(newLow) == len(shortestInherited) {
-				if G.pathSmallerThan(newLow, shortestInherited) {
-					shortestInherited = newLow
-				}
-			}
-			if len(newLow) < len(shortestInherited) {
-				shortestInherited = newLow
-			}
-			if len(longestInherited) == 0 {
-				longestInherited = newHigh
-			}
-			if len(newHigh) == len(longestInherited) {
-				if G.pathSmallerThan(longestInherited, newHigh) {
-					longestInherited = newHigh
-				}
-			}
-			if len(newHigh) > len(longestInherited) {
-				longestInherited = newHigh
-			}
+		targetPLow := make([]int, len(target.path[0]))
+		copy(targetPLow, target.path[0])
+		targetPHigh := make([]int, len(target.path[1]))
+		copy(targetPHigh, target.path[1])
+
+		if targetPLow[0] == inheritedFrom {
+			newLow := append(inheritedPath[0][:len(inheritedPath[0])-1], targetPLow...)
+			//fmt.Fprintf(os.Stdout, "\nUpdating Low Inherited Paths on %v, %v with %v", target.ID, inheritedPath, newLow)
+			target.path[0] = make([]int, len(newLow))
+			copy(target.path[0], newLow)
 		}
-		target.path[0] = make([]int, len(shortestInherited))
-		copy(target.path[0], shortestInherited)
-		target.path[1] = make([]int, len(longestInherited))
-		copy(target.path[1], longestInherited)
+		if targetPHigh[0] == inheritedFrom {
+			newHigh := append(inheritedPath[1][:len(inheritedPath[1])-1], targetPHigh...)
+			//fmt.Fprintf(os.Stdout, "\nUpdating High Inherited Paths on %v, %v with %v", target.ID, inheritedPath, newHigh)
+			target.path[1] = make([]int, len(newHigh))
+			copy(target.path[1], newHigh)
+		}
+
 	} else {
 		sourcePLow := make([]int, len(source.path[0]))
 		copy(sourcePLow, source.path[0])
@@ -145,10 +108,11 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool) *gr
 	}
 
 	for _, v := range target.children {
-		G.updatePath(target, v, true)
-		// The inherited path is used to update all the paths of a subtree.
-		// This inherited property comes of importance when the root of the tree changes and
-		// a new root is added at a level above the current root
+		if isInherited {
+			G.updatePath(target, v, true, inheritedPath, inheritedFrom)
+		} else {
+			G.updatePath(target, v, true, target.path, target.ID)
+		}
 	}
 
 	return G
