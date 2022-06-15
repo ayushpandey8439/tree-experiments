@@ -1,6 +1,5 @@
 package main
 
-// TODO: Paths of equal lengths cause problems and the result is based on the update order. This needs to be mitigated.
 import (
 	"fmt"
 	"io"
@@ -12,11 +11,12 @@ import (
 var loggingMode string
 
 type vertex struct {
-	ID       int
-	children map[int]*vertex
-	parents  map[int]*vertex
-	path     [2][]int
-	data     int
+	ID             int
+	children       map[int]*vertex
+	parents        map[int]*vertex
+	path           [2][]int
+	LSCAPathLength int
+	data           int
 }
 
 // We only allow a single vertex entry to the graph.
@@ -30,11 +30,12 @@ type graph struct {
 
 func (G *graph) createVertex(V int) *graph {
 	Node := &vertex{
-		ID:       G.nodeCounter,
-		children: make(map[int]*vertex),
-		parents:  make(map[int]*vertex),
-		path:     [2][]int{{G.nodeCounter}, {G.nodeCounter}},
-		data:     V,
+		ID:             G.nodeCounter,
+		children:       make(map[int]*vertex),
+		parents:        make(map[int]*vertex),
+		path:           [2][]int{{G.nodeCounter}, {G.nodeCounter}},
+		LSCAPathLength: 0,
+		data:           V,
 	}
 	G.vertices[G.nodeCounter] = Node
 	G.nodeCounter++
@@ -48,12 +49,12 @@ func (G *graph) createEdge(V1 int, V2 int) *graph {
 	source.children[V2] = target
 	target.parents[V1] = source
 
-	G.updatePath(source, target, false, [2][]int{}, source.ID)
+	G.updatePath(source, target, false, source.ID, [2][]int{})
 
 	return G
 }
 
-func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inheritedPath [2][]int, inheritedFrom int) *graph {
+func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inheritedFrom int, inheritedPath [2][]int) *graph {
 
 	if isInherited {
 		targetPLow := make([]int, len(target.path[0]))
@@ -75,6 +76,7 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inh
 		}
 
 	} else {
+		updated := false
 		sourcePLow := make([]int, len(source.path[0]))
 		copy(sourcePLow, source.path[0])
 		sourcePHigh := make([]int, len(source.path[1]))
@@ -89,48 +91,55 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inh
 		targetPHighNew := append(sourcePHigh, target.ID)
 		fmt.Fprintf(os.Stdout, "\nUpdate edge %v, %v Old Paths are %v %v ", source.ID, target.ID, targetPLow, targetPHigh)
 
-		if len(targetPLowNew) == len(targetPLow) {
-			if G.pathSmallerThan(targetPLowNew, targetPLow) {
-				target.path[0] = targetPLowNew
-			}
-		} else if len(targetPLowNew) < len(targetPLow) || len(targetPLow) == 1 {
-			target.path[0] = targetPLowNew
-		}
-		if len(targetPHighNew) == len(targetPHigh) {
-			if G.pathSmallerThan(targetPHigh, targetPHighNew) {
-				target.path[1] = targetPHighNew
-			}
-		} else if len(targetPHighNew) > len(targetPHigh) || len(targetPLow) == 1 {
+		if G.pathSmallerThan(targetPHighNew, targetPHigh, target.LSCAPathLength) || len(targetPHigh) == 1 {
 			target.path[1] = targetPHighNew
+			updated = true
 		}
-		fmt.Fprintf(os.Stdout, "Updated paths are %v %v\n", target.path[0], target.path[1])
+		if (!updated && G.pathSmallerThan(targetPLowNew, targetPLow, target.LSCAPathLength)) || len(targetPLow) == 1 {
+			target.path[0] = targetPLowNew
+
+		}
 
 	}
 
+	commonPathLength := 0
+	for i := 0; i < len(target.path[1]); i++ {
+		if target.path[0][i] == target.path[1][i] {
+			commonPathLength++
+		} else {
+			break
+		}
+	}
+
+	target.LSCAPathLength = commonPathLength
+
+	fmt.Fprintf(os.Stdout, "Updated paths are %v %v\n", target.path[0], target.path[1])
+
 	for _, v := range target.children {
 		if isInherited {
-			G.updatePath(target, v, true, inheritedPath, inheritedFrom)
+			G.updatePath(target, v, true, inheritedFrom, inheritedPath)
 		} else {
-			G.updatePath(target, v, true, target.path, target.ID)
+			G.updatePath(target, v, true, target.ID, target.path)
 		}
 	}
 
 	return G
 }
-func (G *graph) pathSmallerThan(P1 []int, P2 []int) bool {
+func (G *graph) pathSmallerThan(P1 []int, P2 []int, LSCALength int) bool {
 	// This method assumes that for any node, the children are ordered by their Ids. So a child with a highest ID is the right most child
-	smallerPath := false
+	commonPathLength := 0
 	for i := 0; i < len(P1); i++ {
-		node := P1[i]
-		if P2[i] != node {
-			lowestNode1 := P1[i]
-			lowestNode2 := P2[i]
-			if lowestNode1 < lowestNode2 {
-				smallerPath = true
-			}
+		if P1[i] == P2[i] {
+			commonPathLength++
+		} else {
+			break
 		}
 	}
-	return smallerPath
+	if commonPathLength < LSCALength {
+		return true
+	} else {
+		return false
+	}
 }
 
 func printGraph(w io.Writer, G *graph) {
@@ -268,7 +277,7 @@ func main() {
 	}
 
 	// Define the number of nodes here.
-	numNodes := 10
+	numNodes := 8
 	for j := 1; j <= numNodes; j++ {
 		G.createVertex(j)
 	}
@@ -277,12 +286,13 @@ func main() {
 	G.currentPath = []int{G.root.ID}
 
 	edgeMap := make(map[int][]int)
-	edgeMap[1] = []int{2, 3}
-	edgeMap[2] = []int{4, 5}
-	edgeMap[3] = []int{4, 5, 6, 7}
-	edgeMap[6] = []int{9}
-	edgeMap[7] = []int{8, 9, 10}
-	edgeMap[8] = []int{10}
+	edgeMap[1] = []int{2, 6}
+	edgeMap[2] = []int{3, 8, 5}
+	edgeMap[3] = []int{4}
+	edgeMap[4] = []int{5}
+	edgeMap[6] = []int{7}
+	edgeMap[7] = []int{5}
+	edgeMap[8] = []int{}
 
 	for Source, Targets := range edgeMap {
 		for _, Target := range Targets {
