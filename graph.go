@@ -67,8 +67,9 @@ func (G *graph) removeEdge(V1 int, V2 int) *graph {
 
 	shortestPrefix := len(target.path[0])
 	for _, c := range target.parents {
-		if G.pathSmallerThan(c.path[1], target.path[0], shortestPrefix) {
-			target.path[1] = append(c.path[1], target.ID)
+		comparisionPath := append(c.path[1], target.ID)
+		if G.shortensPrefix(comparisionPath, target.path[0], shortestPrefix) {
+			target.path[1] = comparisionPath
 		}
 	}
 
@@ -127,11 +128,11 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inh
 		targetPHighNew := append(sourcePHigh, target.ID)
 		fmt.Fprintf(os.Stdout, "\nUpdate edge %v, %v Old Paths are %v %v ", source.ID, target.ID, targetPLow, targetPHigh)
 
-		if G.pathSmallerThan(targetPHighNew, targetPHigh, target.LSCAPathLength) || len(targetPHigh) == 1 {
+		if G.shortensPrefix(targetPHighNew, targetPHigh, target.LSCAPathLength) || len(targetPHigh) == 1 {
 			target.path[1] = targetPHighNew
 			updated = true
 		}
-		if (!updated && G.pathSmallerThan(targetPLowNew, targetPLow, target.LSCAPathLength)) || len(targetPLow) == 1 {
+		if (!updated && G.shortensPrefix(targetPLowNew, targetPLow, target.LSCAPathLength)) || len(targetPLow) == 1 {
 			target.path[0] = targetPLowNew
 
 		}
@@ -161,7 +162,7 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inh
 
 	return G
 }
-func (G *graph) pathSmallerThan(P1 []int, P2 []int, LSCALength int) bool {
+func (G *graph) shortensPrefix(P1 []int, P2 []int, LSCALength int) bool {
 	// This method assumes that for any node, the children are ordered by their Ids. So a child with a highest ID is the right most child
 	commonPathLength := 0
 	shorterPath := P1
@@ -330,9 +331,9 @@ func main() {
 
 	edgeMap := make(map[int][]int)
 	edgeMap[1] = []int{2, 6}
+	edgeMap[4] = []int{5}
 	edgeMap[2] = []int{3, 8, 5}
 	edgeMap[3] = []int{4}
-	edgeMap[4] = []int{5}
 	edgeMap[6] = []int{7}
 	edgeMap[7] = []int{5}
 	edgeMap[8] = []int{}
