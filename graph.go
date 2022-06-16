@@ -54,6 +54,42 @@ func (G *graph) createEdge(V1 int, V2 int) *graph {
 	return G
 }
 
+func (G *graph) removeEdge(V1 int, V2 int) *graph {
+	source := G.vertices[V1]
+	target := G.vertices[V2]
+
+	delete(source.children, V2)
+	delete(target.parents, V1)
+	for _, p := range target.parents {
+		target.path[0] = append(p.path[0], target.ID)
+		break
+	}
+
+	shortestPrefix := len(target.path[0])
+	for _, c := range target.parents {
+		if G.pathSmallerThan(c.path[1], target.path[0], shortestPrefix) {
+			target.path[1] = append(c.path[1], target.ID)
+		}
+	}
+
+	commonPathLength := 0
+	for i := 0; i < len(target.path[1]); i++ {
+		if target.path[0][i] == target.path[1][i] {
+			commonPathLength++
+		} else {
+			break
+		}
+	}
+
+	target.LSCAPathLength = commonPathLength
+
+	for _, v := range target.children {
+		G.updatePath(target, v, false, target.ID, target.path)
+	}
+
+	return G
+}
+
 func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inheritedFrom int, inheritedPath [2][]int) *graph {
 
 	if isInherited {
@@ -128,9 +164,16 @@ func (G *graph) updatePath(source *vertex, target *vertex, isInherited bool, inh
 func (G *graph) pathSmallerThan(P1 []int, P2 []int, LSCALength int) bool {
 	// This method assumes that for any node, the children are ordered by their Ids. So a child with a highest ID is the right most child
 	commonPathLength := 0
-	for i := 0; i < len(P1); i++ {
+	shorterPath := P1
+	if !(len(P1) <= len(P2)) {
+		shorterPath = P2
+	}
+	for i := 0; i < len(shorterPath); i++ {
 		if P1[i] == P2[i] {
 			commonPathLength++
+			if commonPathLength >= LSCALength {
+				break
+			}
 		} else {
 			break
 		}
@@ -147,7 +190,7 @@ func printGraph(w io.Writer, G *graph) {
 	for i := 1; i <= len(G.vertices); i++ {
 		V := G.vertices[i]
 
-		fmt.Fprintf(w, "Node:  %v %v\t Children: ", V.ID, &V)
+		fmt.Fprintf(w, "Node: %v %v  Parents: %v\t Children: ", V.ID, &V, V.parents)
 		fmt.Fprintf(w, "%v \t", V.children)
 		fmt.Fprintf(w, "\t Paths: %v\t \n", V.path)
 
@@ -301,6 +344,10 @@ func main() {
 		}
 	}
 
+	printGraph(os.Stdout, G)
+	fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", G.testAllPairLCSA(numNodes))
+
+	G.removeEdge(7, 5)
 	printGraph(os.Stdout, G)
 	fmt.Fprintf(os.Stdout, "\nAll Pair LCSA failed for  %v \n\n", G.testAllPairLCSA(numNodes))
 	runtime.GC()
